@@ -1,0 +1,8 @@
+# 수료증 생성기 Python 의존성
+# 설치:  pip3 install -r requirements.txt
+#
+# 아래 버전은 동작 검증을 마친 최소 버전입니다.
+# PDF 변환에는 LibreOffice가 별도로 필요합니다(README 참고, pip 대상 아님).
+
+openpyxl>=3.1.5
+python-pptx>=1.0.2
