@@ -63,13 +63,13 @@ python3 generate_certificates.py \
 
 ```
 output ppt/
-  테크빌교육㈜_생성형 AI 마케팅 과정/
-    이승연.pptx
-    조현진.pptx
+  주식회사에이비씨_생성형 AI 입문과정/
+    홍길동.pptx
+    김철수.pptx
 output pdf/
-  테크빌교육㈜_생성형 AI 마케팅 과정/
-    이승연.pdf
-    조현진.pdf
+  주식회사에이비씨_생성형 AI 입문과정/
+    홍길동.pdf
+    김철수.pdf
 ```
 
 회사·과정이 다른 행은 각각 다른 폴더로 자동 분리됩니다.

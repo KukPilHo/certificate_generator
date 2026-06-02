@@ -62,8 +62,8 @@ COLUMN_MAP = {
 NAME_PLACEHOLDER = "_Name"
 
 # 출력 폴더 묶음 기준: 아래 placeholder 값들을 '_'로 이어 폴더명을 만든다.
-# 예) _Organization="테크빌교육㈜", _ProjectName="생성형 AI 마케팅 과정"
-#     → 폴더 "테크빌교육㈜_생성형 AI 마케팅 과정"
+# 예) _Organization="주식회사에이비씨", _ProjectName="생성형 AI 입문과정"
+#     → 폴더 "주식회사에이비씨_생성형 AI 입문과정"
 # 결과: output ppt/<폴더>/이름.pptx , output pdf/<폴더>/이름.pdf
 GROUP_PLACEHOLDERS = ("_Organization", "_ProjectName")
 
