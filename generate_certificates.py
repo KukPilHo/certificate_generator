@@ -199,11 +199,19 @@ def _replace_in_paragraph(paragraph, mapping):
             r.text = ""
 
 
+# run/paragraph 내 폰트 지정 태그
 _FONT_TAGS = {qn("a:latin"), qn("a:ea"), qn("a:cs"), qn("a:sym"), qn("a:buFont")}
+
+# 테마 fontScheme 내 스크립트별 폰트 태그 (예: <a:font script="Hang" typeface="맑은 고딕"/>)
+_THEME_FONT_TAG = qn("a:font")
+
+# 테마에서 한국어 관련 스크립트 (이것들의 typeface 를 통일 폰트로 교체)
+_KOREAN_SCRIPTS = {"Hang"}
 
 
 def _apply_fonts(element, unified_font):
-    """element 하위 트리의 모든 폰트 지정(run rPr, endParaRPr, defRPr, 리스트 스타일 등)을 처리.
+    """element 하위 트리의 모든 폰트 지정(run rPr, endParaRPr, defRPr, 리스트 스타일,
+    그리고 테마 fontScheme 의 한국어 스크립트 폰트 등)을 처리.
     - unified_font가 있으면: 모든 글자를 그 폰트 하나로 통일.
     - None이면: FONT_MAP에 따라 OS 종속 폰트만 치환(구버전 동작).
     run 단위만 보면 endParaRPr 등에 남는 폰트를 놓치므로 트리 전체를 순회한다."""
@@ -215,6 +223,16 @@ def _apply_fonts(element, unified_font):
                 face = el.get("typeface")
                 if face in FONT_MAP:
                     el.set("typeface", FONT_MAP[face])
+        # 테마 fontScheme 내 <a:font script="Hang" typeface="맑은 고딕"/> 등 처리
+        elif el.tag == _THEME_FONT_TAG:
+            script = el.get("script", "")
+            if script in _KOREAN_SCRIPTS:
+                if unified_font:
+                    el.set("typeface", unified_font)
+                else:
+                    face = el.get("typeface")
+                    if face in FONT_MAP:
+                        el.set("typeface", FONT_MAP[face])
 
 
 def _iter_text_frames(shapes):
@@ -244,6 +262,35 @@ def fill_template(template_path: str, mapping: dict):
         _apply_fonts(master._element, font)
         for layout in master.slide_layouts:
             _apply_fonts(layout._element, font)
+
+    # ── python-pptx 가 slide_masters 로 노출하지 않는 파트들도 폰트 치환 ──
+    # 0) presentation.xml 의 defaultTextStyle (기본 텍스트 레벨별 폰트)
+    _apply_fonts(prs.part._element, font)
+    # 1) 테마 파트: fontScheme 안의 한국어 스크립트 폰트가 남아 있으면
+    #    LibreOffice 가 PDF 변환 시 fallback 으로 사용해 서체가 달라진다.
+    for rel in prs.part.rels.values():
+        target = rel.target_part
+        ct = getattr(target, "content_type", "")
+        # theme, notesMaster 등 XML 파트의 요소 트리를 직접 순회
+        if ct and ("theme" in ct or "notesMaster" in ct):
+            root = getattr(target, "_element", None)
+            if root is not None:
+                _apply_fonts(root, font)
+    # 2) 각 슬라이드/마스터/레이아웃이 참조하는 theme 파트도 처리
+    all_parts = [prs.part]
+    for master in prs.slide_masters:
+        all_parts.append(master.part)
+        for layout in master.slide_layouts:
+            all_parts.append(layout.part)
+    for part in all_parts:
+        for rel in part.rels.values():
+            target = rel.target_part
+            ct = getattr(target, "content_type", "")
+            if ct and ("theme" in ct or "notesMaster" in ct or "notesSlide" in ct):
+                root = getattr(target, "_element", None)
+                if root is not None:
+                    _apply_fonts(root, font)
+
     return prs
 
 
