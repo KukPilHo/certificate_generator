@@ -266,17 +266,53 @@ def fill_template(template_path: str, mapping: dict):
     # ── python-pptx 가 slide_masters 로 노출하지 않는 파트들도 폰트 치환 ──
     # 0) presentation.xml 의 defaultTextStyle (기본 텍스트 레벨별 폰트)
     _apply_fonts(prs.part._element, font)
-    # 1) 테마 파트: fontScheme 안의 한국어 스크립트 폰트가 남아 있으면
-    #    LibreOffice 가 PDF 변환 시 fallback 으로 사용해 서체가 달라진다.
+
+    # 1) 테마·notesMaster 등의 XML 파트를 직접 파싱하여 폰트 교체
+    #    python-pptx 는 테마를 Part(blob) 로 관리하므로 _element 가 없다.
+    #    blob → lxml parse → _apply_fonts → 직렬화하여 blob 에 다시 기록한다.
+    _processed_parts = set()          # 중복 처리 방지
+
+    def _fix_blob_part(part):
+        """blob 기반 XML 파트의 폰트를 치환한다."""
+        pid = id(part)
+        if pid in _processed_parts:
+            return
+        _processed_parts.add(pid)
+        blob = getattr(part, "blob", None)
+        if blob is None:
+            return
+        try:
+            from lxml import etree
+            root = etree.fromstring(blob)
+            _apply_fonts(root, font)
+            part._blob = etree.tostring(root, xml_declaration=True,
+                                        encoding="UTF-8", standalone=True)
+        except Exception:
+            pass  # 파싱 불가한 바이너리(fntdata 등)는 무시
+
+    # presentation 이 직접 참조하는 theme, notesMaster
     for rel in prs.part.rels.values():
         target = rel.target_part
         ct = getattr(target, "content_type", "")
-        # theme, notesMaster 등 XML 파트의 요소 트리를 직접 순회
         if ct and ("theme" in ct or "notesMaster" in ct):
-            root = getattr(target, "_element", None)
-            if root is not None:
-                _apply_fonts(root, font)
-    # 2) 각 슬라이드/마스터/레이아웃이 참조하는 theme 파트도 처리
+            # _element 이 있는 XmlPart 면 그것을 사용, 없으면 blob 직접 처리
+            el = getattr(target, "_element", None)
+            if el is not None:
+                _apply_fonts(el, font)
+            else:
+                _fix_blob_part(target)
+            # notesMaster 가 자체 theme 를 참조할 수 있으므로 재귀
+            for sub_rel in getattr(target, "rels", {}).values():
+                sub = sub_rel.target_part
+                sub_ct = getattr(sub, "content_type", "")
+                if sub_ct and "theme" in sub_ct:
+                    sub_el = getattr(sub, "_element", None)
+                    if sub_el is not None:
+                        _apply_fonts(sub_el, font)
+                    else:
+                        _fix_blob_part(sub)
+
+    # 슬라이드/마스터/레이아웃이 참조하는 theme 파트
     all_parts = [prs.part]
     for master in prs.slide_masters:
         all_parts.append(master.part)
@@ -287,9 +323,11 @@ def fill_template(template_path: str, mapping: dict):
             target = rel.target_part
             ct = getattr(target, "content_type", "")
             if ct and ("theme" in ct or "notesMaster" in ct or "notesSlide" in ct):
-                root = getattr(target, "_element", None)
-                if root is not None:
-                    _apply_fonts(root, font)
+                el = getattr(target, "_element", None)
+                if el is not None:
+                    _apply_fonts(el, font)
+                else:
+                    _fix_blob_part(target)
 
     return prs
 
